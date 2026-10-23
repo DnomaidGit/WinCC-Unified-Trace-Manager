@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WinCC Unified Trace Manager</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#edf1f5;font:14px Arial,sans-serif;color:#10213b}.panel{max-width:1060px;margin:48px auto;padding:28px;background:white;border-radius:14px;box-shadow:0 7px 30px #172a4412}h1{margin:0 0 6px;font-size:24px}p{color:#526783;margin:0 0 26px}.fields{display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:20px}label{font-weight:bold;font-size:12px;display:block;margin-bottom:7px}input{width:100%;padding:12px;border:1px solid #c9d5e5;border-radius:7px;font-size:14px}.buttons{display:flex;gap:9px;flex-wrap:wrap}button{padding:12px 15px;border:0;border-radius:7px;background:#e4edf8;color:#15365b;font-weight:bold;cursor:pointer}button.primary{background:#1763cb;color:white}button.stop{background:#c43438;color:white}button:disabled{opacity:.55;cursor:default}#status{margin:20px 0 10px;font-size:13px}#console{height:390px;background:#0e1727;color:#a5e6b0;border-radius:9px;padding:18px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 Consolas,monospace}#error{color:#b52b2b;min-height:20px;margin-top:12px}@media(max-width:700px){.panel{margin:10px;padding:18px}.fields{grid-template-columns:1fr}}
+</style></head><body><main class="panel"><h1>WinCC Unified Trace Manager</h1><p>Conexión a panel Unified · consola TraceReceiver en tiempo real</p>
+<div class="fields"><div><label for="ip">IP del panel</label><input id="ip" value="192.168.1.100"></div><div><label for="bin">Carpeta de ejecutables Siemens</label><input id="bin" value="C:\Program Files\Siemens\Automation\WinCCUnified\bin"></div></div>
+<div class="buttons"><button class="primary" id="connect">▶ Conectar</button><button id="viewer">Abrir TraceViewer</button><button id="save">Guardar configuración</button><button id="clear">Limpiar vista</button><button id="export">Exportar TXT</button></div>
+<div id="status">○ Receptor detenido</div><div id="console"></div><div id="error"></div></main>
+<script>
+const $=id=>document.getElementById(id);let visible='',clearedAt=0,latest='',busy=false;
+async function api(path,data){let options=data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)};let r=await fetch(path,options);let j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);return j}
+const settings=()=>({ip:$('ip').value.trim(),bin:$('bin').value.trim()});
+async function action(path,data){$('error').textContent='';try{return await api(path,data)}catch(e){$('error').textContent='Error: '+e.message;return null}}
+$('connect').onclick=()=>action('/api/start',settings()).then(refresh);
+$('viewer').onclick=()=>action('/api/viewer',settings());
+$('save').onclick=()=>action('/api/save',settings());
+$('clear').onclick=()=>{clearedAt=latest.length;$('console').textContent=''};
+$('export').onclick=()=>{const blob=new Blob([$('console').textContent],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='trace-receiver.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+async function refresh(){if(busy)return;busy=true;try{let j=await api('/api/log');$('status').textContent=j.running?'● Receptor en ejecución':'○ Receptor detenido';let combined=(j.stdout||'')+(j.stderr?'\n[STDERR]\n'+j.stderr:'');if(combined!==latest){if(combined.length<latest.length)clearedAt=0;latest=combined;visible=combined.slice(Math.min(clearedAt,combined.length));const c=$('console');c.textContent=visible;c.scrollTop=c.scrollHeight}}catch(e){$('error').textContent='Error de comunicación HTTP: '+e.message}finally{busy=false}}
+(async()=>{let s=await action('/api/status');if(s){$('ip').value=s.ip||'192.168.1.100';$('bin').value=s.bin||'C:\\Program Files\\Siemens\\Automation\\WinCCUnified\\bin'}await refresh();setInterval(refresh,1000)})();
+</script></body></html>
